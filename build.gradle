@@ -1,0 +1,54 @@
+plugins {
+    id 'java'
+}
+
+group = 'controllerreconnectfix'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+repositories {
+    mavenCentral()
+}
+
+def steamRoot = System.getenv('STEAM_PATH') ?: 'E:/SteamLibrary/steamapps'
+def stsJar = file("${steamRoot}/common/SlayTheSpire/desktop-1.0.jar")
+def mtsJar = file("${steamRoot}/workshop/content/646570/1605060445/ModTheSpire.jar")
+def baseModJar = file("${steamRoot}/workshop/content/646570/1605833019/BaseMod.jar")
+
+tasks.register('verifyClasspath') {
+    doLast {
+        [stsJar, mtsJar, baseModJar].each { jarFile ->
+            if (!jarFile.isFile()) {
+                throw new GradleException("Missing dependency jar: ${jarFile.absolutePath}")
+            }
+        }
+    }
+}
+
+dependencies {
+    compileOnly files(stsJar)
+    compileOnly files(mtsJar)
+    compileOnly files(baseModJar)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('verifyClasspath')
+}
+
+tasks.named('jar') {
+    archiveBaseName = 'ControllerReconnectFix'
+}
+
+tasks.register('copyToMods', Copy) {
+    dependsOn tasks.named('jar')
+    from(tasks.named('jar').flatMap { it.archiveFile })
+    into(file("${steamRoot}/common/SlayTheSpire/mods"))
+}

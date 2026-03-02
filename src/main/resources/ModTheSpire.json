@@ -1,0 +1,10 @@
+{
+  "modid": "controllerreconnectfix",
+  "name": "Controller Reconnect Fix",
+  "author_list": ["apric", "Codex"],
+  "description": "Repairs controller reconnect behavior by rebinding DirectInput and SteamInput controllers when they come back online.",
+  "version": "1.0.0",
+  "sts_version": "12-18-2022",
+  "mts_version": "3.30.0",
+  "dependencies": ["basemod"]
+}
