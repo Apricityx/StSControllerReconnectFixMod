@@ -12,6 +12,7 @@ import com.badlogic.gdx.utils.ObjectMap;
 import com.codedisaster.steamworks.SteamControllerHandle;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
 import com.megacrit.cardcrawl.core.Settings;
+import com.megacrit.cardcrawl.helpers.ImageMaster;
 import com.megacrit.cardcrawl.helpers.controller.CInputHelper;
 import com.megacrit.cardcrawl.helpers.controller.CInputListener;
 import com.megacrit.cardcrawl.helpers.steamInput.SteamInputHelper;
@@ -34,6 +35,7 @@ public class ControllerReconnectFixMod implements PostUpdateSubscriber {
     private static long lastManagerRefreshNs;
 
     private static SteamControllerHandle lastSteamHandle;
+    private static boolean lastSteamConnected;
 
     public static void initialize() {
         BaseMod.subscribe(new ControllerReconnectFixMod());
@@ -88,7 +90,7 @@ public class ControllerReconnectFixMod implements PostUpdateSubscriber {
                 if (refreshed != null && refreshed.size > 0) {
                     Controller refreshedCurrent = CInputHelper.controller;
                     boolean refreshedPresent = refreshedCurrent != null && containsController(refreshed, refreshedCurrent);
-                    if (!refreshedPresent || CInputHelper.listener == null || !Settings.isControllerMode) {
+                    if (!refreshedPresent || CInputHelper.listener == null) {
                         bindController(refreshed.first());
                     }
                 }
@@ -109,6 +111,7 @@ public class ControllerReconnectFixMod implements PostUpdateSubscriber {
 
             if (connected <= 0) {
                 lastSteamHandle = null;
+                lastSteamConnected = false;
                 return;
             }
 
@@ -117,16 +120,20 @@ public class ControllerReconnectFixMod implements PostUpdateSubscriber {
                 return;
             }
 
-            if (lastSteamHandle == null
-                    || !lastSteamHandle.equals(handle)
-                    || SteamInputHelper.handle == null
-                    || !SteamInputHelper.handle.equals(handle)) {
+            boolean handleChanged = !sameSteamHandle(lastSteamHandle, handle);
+            boolean needsReinit = handleChanged || !sameSteamHandle(SteamInputHelper.handle, handle);
+
+            if (needsReinit) {
                 SteamInputHelper.initActions(handle);
-                Settings.isControllerMode = true;
-                Settings.isTouchScreen = false;
-                lastSteamHandle = handle;
-                logger.info("[ControllerReconnectFix] SteamInput handle rebound: {}", handle);
+                if (!lastSteamConnected || handleChanged) {
+                    Settings.isControllerMode = true;
+                    Settings.isTouchScreen = false;
+                    logger.info("[ControllerReconnectFix] SteamInput handle rebound: {}", handle);
+                }
             }
+
+            lastSteamHandle = handle;
+            lastSteamConnected = true;
         } catch (Throwable ignored) {
         }
     }
@@ -141,8 +148,7 @@ public class ControllerReconnectFixMod implements PostUpdateSubscriber {
                 CInputHelper.listener = new CInputListener();
             }
             CInputHelper.setController(controller);
-            Settings.isControllerMode = true;
-            Settings.isTouchScreen = false;
+            applyDirectInputPresentation(controller);
             logger.info("[ControllerReconnectFix] DirectInput controller rebound: {}", safeName(controller));
         } catch (Throwable t) {
             logger.warn("[ControllerReconnectFix] Failed to bind DirectInput controller", t);
@@ -177,7 +183,7 @@ public class ControllerReconnectFixMod implements PostUpdateSubscriber {
         if (CInputHelper.listener == null) {
             return true;
         }
-        return !Settings.isControllerMode;
+        return false;
     }
     
     private static boolean refreshControllerManager() {
@@ -212,5 +218,26 @@ public class ControllerReconnectFixMod implements PostUpdateSubscriber {
         } catch (Throwable ignored) {
             return "unknown";
         }
+    }
+
+    private static void applyDirectInputPresentation(Controller controller) {
+        CInputHelper.ControllerModel model = detectDirectInputModel(controller);
+        CInputHelper.model = model;
+        ImageMaster.loadControllerImages(model);
+    }
+
+    private static CInputHelper.ControllerModel detectDirectInputModel(Controller controller) {
+        String name = safeName(controller);
+        if (name.contains("360")) {
+            return CInputHelper.ControllerModel.XBOX_360;
+        }
+        if (name.contains("Xbox One")) {
+            return CInputHelper.ControllerModel.XBOX_ONE;
+        }
+        return CInputHelper.ControllerModel.XBOX_360;
+    }
+
+    private static boolean sameSteamHandle(SteamControllerHandle left, SteamControllerHandle right) {
+        return left == right || (left != null && left.equals(right));
     }
 }
